@@ -147,6 +147,18 @@ npx ts-node src/destroy-project.ts
 
 ### Étape 1 : Configuration de l'environnement
 
+**Option A : Utiliser le Dev Container (Recommandé)**
+
+Si vous utilisez VS Code avec Docker :
+1. Ouvrez ce dossier dans VS Code
+2. Installez l'extension "Dev Containers"
+3. Appuyez sur `F1` → "Dev Containers: Reopen in Container"
+4. Le container configurera automatiquement Node.js, AWS CLI et installera les dépendances
+
+Voir [.devcontainer/README.md](.devcontainer/README.md) pour plus de détails.
+
+**Option B : Installation locale**
+
 1. Vérifiez votre configuration AWS :
 
 ```bash
