@@ -162,17 +162,34 @@ async function configureBucketCORS(bucketName: string): Promise<void> {
 }
 
 /**
- * Upload ship photos from assets folder
+ * Upload ship photos from assets folder to S3
+ * 
+ * Cette fonction gère l'upload des images avec un système de mapping intelligent :
+ * - Lit les fichiers locaux depuis le dossier assets/
+ * - Applique un mapping pour renommer les fichiers si nécessaire
+ * - Upload vers S3 avec le content-type approprié
+ * 
+ * Mapping des fichiers :
+ * - fisher.jpg (local) → pecheur-b-001.jpg (S3)
+ * - tanker.jpg (local) → tanker-b-002.jpg (S3)
+ * 
+ * Ce mapping permet de gérer des conventions de nommage différentes
+ * entre l'environnement de développement et les références dans la base de données.
+ * 
+ * @param bucketName - Nom du bucket S3 cible
+ * @param assetsPath - Chemin vers le dossier contenant les images
+ * @returns Promise<string[]> - Liste des clés S3 uploadées
  */
 async function uploadShipPhotos(bucketName: string, assetsPath: string): Promise<string[]> {
   console.log(`📤 Uploading ship photos from ${assetsPath}...`);
 
   const uploadedFiles: string[] = [];
 
-  // Filename mapping: local file -> S3 key name
+  // Filename mapping: local file → S3 key name
+  // Permet de maintenir des noms de fichiers différents entre dev et prod
   const filenameMapping: Record<string, string> = {
-    'fisher.jpg': 'pecheur-b-001.jpg',
-    'tanker.jpg': 'tanker-b-002.jpg',
+    'fisher.jpg': 'pecheur-b-001.jpg',  // Bateau de pêche français
+    'tanker.jpg': 'tanker-b-002.jpg',   // Tanker libérien
   };
 
   try {

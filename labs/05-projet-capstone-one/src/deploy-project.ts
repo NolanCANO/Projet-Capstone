@@ -7,7 +7,30 @@ import {
   getTableInfo,
 } from './dynamodb';
 
-// Main function to execute all operations
+/**
+ * Fonction principale de déploiement du projet Capstone Maritime Surveillance
+ * 
+ * Architecture déployée:
+ * - S3 Bucket: Stockage des photos de navires (fisher.jpg, tanker.jpg)
+ * - DynamoDB: Base de données des navires (id, nom, type, pavillon, etc.)
+ * - API Gateway: API REST avec 3 endpoints (GET /ships, /ships/profile/{key}, /ships/photo/{key})
+ * - IAM Roles: Permissions pour API Gateway → DynamoDB et API Gateway → S3
+ * 
+ * Ordre d'exécution (CRITIQUE - ne pas modifier):
+ * 1. S3 - Créer bucket + uploader photos (avec mapping fisher.jpg → pecheur-b-001.jpg)
+ * 2. DynamoDB - Créer table + insérer data depuis data/ships.json
+ * 3. IAM - Vérifier que les rôles existent (via variables d'environnement)
+ * 4. API Gateway - Créer API + endpoints + déploiement + API key
+ * 
+ * Prérequis:
+ * - AWS CLI configuré avec --profile aws-labs
+ * - Variables d'environnement: DYNAMODB_ROLE_ARN, S3_ROLE_ARN
+ * - Fichiers: data/ships.json, assets/*.jpg
+ * 
+ * Commandes:
+ * - Déploiement: npm run deploy
+ * - Cleanup: npm run cleanup
+ */
 async function deploy() {
   try {
     console.log('🚀 Starting Project Deployment...\n');

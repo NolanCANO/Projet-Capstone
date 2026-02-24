@@ -58,6 +58,25 @@ export interface ApiGatewayResult {
 
 /**
  * Main function to create and configure the complete API Gateway
+ * 
+ * Cette fonction orchestre la création complète de l'API Gateway pour le système de surveillance maritime
+ * 
+ * Séquence d'exécution (ORDRE CRITIQUE):
+ * 1. createRestApi() - Créer l'API REST avec support binaire pour les images
+ * 2. getRootResource() - Récupérer l'ID de la ressource racine /
+ * 3. createResourceStructure() - Créer l'arborescence des ressources (/ships, /ships/photo/{key}, /ships/profile/{key})
+ * 4. configureGet*Endpoint() - Configurer chaque endpoint avec:
+ *    - Method (GET + API Key required)
+ *    - Integration (DynamoDB Scan/GetItem ou S3 GetObject)
+ *    - Method Response (status codes + headers)
+ *    - Integration Response (transformations VTL + gestion erreurs)
+ * 5. enableCORS() - Ajouter OPTIONS method sur chaque ressource (preflight)
+ * 6. addGatewayResponseCORS() - Ajouter headers CORS sur les erreurs API Gateway
+ * 7. deployApi() - Déployer sur le stage "prod"
+ * 8. createApiKeyAndUsagePlan() - Créer clé API + limites throttling/quota
+ * 
+ * @param config - Configuration (bucket S3, table DynamoDB, IAM roles)
+ * @returns Résultat du déploiement (URL API + clé API)
  */
 export async function createApiGateway(config: ApiGatewayConfig): Promise<ApiGatewayResult> {
   console.log('📡 Creating API Gateway for Maritime Surveillance...\n');
@@ -108,6 +127,13 @@ export async function createApiGateway(config: ApiGatewayConfig): Promise<ApiGat
 
 /**
  * Create the REST API
+ * Configure l'API Gateway avec support pour les contenus binaires (images)
+ * 
+ * Configuration critique:
+ * - binaryMediaTypes: Déclare les types MIME traités comme binaires
+ *   Sans cela, API Gateway tenterait d'encoder les images en base64
+ *   ce qui corromprait les données JPEG/PNG
+ * - endpointConfiguration: REGIONAL (évite les coûts CloudFront)
  */
 async function createRestApi(): Promise<string> {
   console.log('📦 Creating REST API...');
@@ -157,18 +183,23 @@ async function getRootResource(apiId: string): Promise<string> {
 /**
  * Create the complete resource structure
  * 
- * Structure:
+ * Structure de l'API (3 endpoints REST):
  * /
- * └── /ships
+ * └── /ships                    → GET liste tous les navires (DynamoDB Scan)
  *     ├── /photo
- *     │   └── /{key}
+ *     │   └── /{key}            → GET photo d'un navire (S3 GetObject)
  *     └── /profile
- *         └── /{key}
+ *         └── /{key}            → GET profil d'un navire (DynamoDB GetItem)
+ * 
+ * Hiérarchie des ressources:
+ * - Chaque ressource a un ID unique
+ * - Les ressources enfants référencent le parentId
+ * - Les path parameters utilisent la notation {key}
  */
 async function createResourceStructure(apiId: string, rootResourceId: string) {
   console.log('🌳 Creating resource structure...');
 
-  // Create /ships
+  // Create /ships (ressource parente pour tous les endpoints navires)
   const shipsResponse = await apiGatewayClient.send(
     new CreateResourceCommand({
       restApiId: apiId,
@@ -289,6 +320,9 @@ async function configureGetShipsEndpoint(
   );
 
   // Integration response with VTL transformation - 200 (Default)
+  // VTL (Velocity Template Language) transforme la réponse DynamoDB en JSON simple
+  // Format DynamoDB: {"Items": [{"id": {"S": "B-001"}, "nom": {"S": "..."}}]}
+  // Format cible: {"ships": [{"id": "B-001", "nom": "..."}]}
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -426,6 +460,9 @@ async function configureGetShipProfileEndpoint(
   );
 
   // Integration response - 500 (Catches DynamoDB errors - must come FIRST)
+  // Le selectionPattern DOIT être défini AVANT la réponse 200 par défaut
+  // Pattern regex qui détecte les erreurs DynamoDB dans la réponse
+  // Exemples: ValidationException, ResourceNotFoundException, etc.
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -443,6 +480,8 @@ async function configureGetShipProfileEndpoint(
   );
 
   // Integration response - 404 (Item not found)
+  // Détecte quand DynamoDB retourne un objet Item vide {}
+  // Ceci se produit quand la clé n'existe pas dans la table
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -460,6 +499,9 @@ async function configureGetShipProfileEndpoint(
   );
 
   // Integration response - 200 (Default - successful responses with items)
+  // C'est la réponse par défaut (pas de selectionPattern)
+  // VTL transforme le format DynamoDB en JSON simple
+  // Vérifie que Item existe ET n'est pas vide avant de transformer
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -518,6 +560,10 @@ async function configureGetShipPhotoEndpoint(
   );
 
   // Configure S3 integration (GetObject)
+  // Cette intégration proxy les requêtes vers S3 GetObject
+  // contentHandling: CONVERT_TO_BINARY est ESSENTIEL pour les images
+  // Sans cela, API Gateway corrompt les données binaires JPEG/PNG
+  // Le paramètre {key} est mappé depuis le path parameter de la requête
   await apiGatewayClient.send(
     new PutIntegrationCommand({
       restApiId: apiId,
@@ -551,6 +597,9 @@ async function configureGetShipPhotoEndpoint(
   );
 
   // Integration response - 200 (Default)
+  // Passe les headers S3 (Content-Type, Content-Length) au client
+  // Ceci préserve le type MIME original de l'image (image/jpeg, image/png)
+  // Le corps de la réponse contient les bytes bruts de l'image
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -566,6 +615,8 @@ async function configureGetShipPhotoEndpoint(
   );
 
   // Integration response - 404 (Catches S3 errors)
+  // Détecte les erreurs S3: NoSuchKey (fichier introuvable), AccessDenied
+  // Pattern regex couvre plusieurs types d'erreurs S3
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -679,12 +730,27 @@ async function addGatewayResponseCORS(apiId: string) {
 
 /**
  * Create API Key and Usage Plan
- * This secures the API endpoints by requiring an API key
+ * Sécurise tous les endpoints avec une clé API et définit des limites d'utilisation
+ * 
+ * Fonctionnement:
+ * 1. Création d'une API Key unique (timestamp pour éviter les doublons)
+ * 2. Création d'un Usage Plan avec throttling et quota
+ * 3. Association de l'API Key au Usage Plan
+ * 
+ * Limites configurées:
+ * - Rate limit: 100 req/s (empêche les abus)
+ * - Burst limit: 200 req simultanées (gère les pics de trafic)
+ * - Quota: 10,000 req/jour (protège contre la surutilisation)
+ * 
+ * @param apiId - ID de l'API REST Gateway
+ * @param stageName - Stage de déploiement (prod, dev, etc.)
+ * @returns La valeur de la clé API (à transmettre aux clients)
  */
 async function createApiKeyAndUsagePlan(apiId: string, stageName: string): Promise<string> {
   console.log('🔑 Creating API Key and Usage Plan...');
 
   // Create API Key
+  // Le timestamp garantit l'unicité du nom même en cas de re-déploiement
   const apiKeyResponse = await apiGatewayClient.send(
     new CreateApiKeyCommand({
       name: `maritime-api-key-${Date.now()}`,
@@ -698,6 +764,8 @@ async function createApiKeyAndUsagePlan(apiId: string, stageName: string): Promi
   console.log(`   ✓ API Key created: ${apiKeyId}`);
 
   // Create Usage Plan
+  // Throttle: Limite la vitesse de consommation (évite le DDoS)
+  // Quota: Limite la consommation totale sur une période (contrôle les coûts)
   const usagePlanResponse = await apiGatewayClient.send(
     new CreateUsagePlanCommand({
       name: `maritime-usage-plan-${Date.now()}`,
@@ -723,6 +791,7 @@ async function createApiKeyAndUsagePlan(apiId: string, stageName: string): Promi
   console.log(`   ✓ Usage Plan created: ${usagePlanId}`);
 
   // Associate API Key with Usage Plan
+  // Sans cette association, la clé API ne serait pas valide
   await apiGatewayClient.send(
     new CreateUsagePlanKeyCommand({
       usagePlanId: usagePlanId,

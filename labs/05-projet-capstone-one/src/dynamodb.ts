@@ -35,12 +35,31 @@ export interface ShipData {
 
 /**
  * Create DynamoDB table for storing ship profiles
+ * 
+ * Configuration de la table:
+ * - Nom: maritime-ships
+ * - Clé primaire: id (String) - HASH key (partition key)
+ * - Billing mode: PAY_PER_REQUEST (pas de capacité provisionnée)
+ *   Avantage: coût basé sur l'utilisation réelle, pas de limite fixe
+ * 
+ * Schéma des items:
+ * {
+ *   id: "B-001",
+ *   nom: "Le Pêcheur Breton",
+ *   type: "Fishing",
+ *   pavillon: "France",
+ *   taille: 45,
+ *   nombre_marins: 12,
+ *   s3_image_key: "pecheur-b-001.jpg"
+ * }
+ * 
+ * La fonction vérifie d'abord si la table existe pour éviter les erreurs
  */
 export async function createDynamoDBTable(): Promise<void> {
   console.log(`\n📋 Checking if table "${TABLE_NAME}" exists...`);
 
   try {
-    // Check if table exists
+    // Check if table exists (évite ResourceInUseException)
     const describeCommand = new DescribeTableCommand({ TableName: TABLE_NAME });
     try {
       const result = await dynamoDBClient.send(describeCommand);
