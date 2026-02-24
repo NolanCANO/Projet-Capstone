@@ -1,28 +1,40 @@
 import { createApiGateway, ApiGatewayConfig } from './api-gateway';
+import { createS3Bucket, S3BucketConfig } from './s3-bucket';
 
 // Main function to execute all operations
 async function deploy() {
   try {
     console.log('🚀 Starting Project Deployment...\n');
 
-    // TODO: Create S3 and Insert Objects
-    const bucketName = 'maritime-surveillance-ships-photos'; // Replace with your bucket name
-    console.log('📦 S3 Bucket (assumed created):', bucketName);
+    // Configuration
+    const bucketName = 'maritime-surveillance-ships-photos';
+    const tableName = 'maritime-ships';
+
+    // Step 1: Create S3 Bucket and Upload Ship Photos
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Step 1: S3 Bucket Setup');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    const s3Config: S3BucketConfig = {
+      bucketName,
+      assetsPath: './assets',
+    };
+
+    const s3Result = await createS3Bucket(s3Config);
 
     // TODO: Create DynamoDB and Insert Items
-    const tableName = 'maritime-ships'; // Replace with your table name
-    console.log('🗄️  DynamoDB Table (assumed created):', tableName);
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Step 2: DynamoDB Setup (TODO)');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log('🗄️  DynamoDB Table (to be implemented):', tableName);
 
-    // Get IAM Role ARNs (must be retrieved from AWS)
-    // Run these commands to get the ARNs:
-    // aws iam get-role --role-name APIGatewayDynamoDBServiceRole --query 'Role.Arn' --output text --profile aws-labs
-    // aws iam get-role --role-name APIGatewayS3ServiceRole --query 'Role.Arn' --output text --profile aws-labs
+    // Step 3: Get IAM Role ARNs
     const dynamodbRoleArn = process.env['DYNAMODB_ROLE_ARN'] || 'arn:aws:iam::ACCOUNT_ID:role/APIGatewayDynamoDBServiceRole';
     const s3RoleArn = process.env['S3_ROLE_ARN'] || 'arn:aws:iam::ACCOUNT_ID:role/APIGatewayS3ServiceRole';
 
-    // Create API Gateway and Configure S3 / DynamoDB Integration
+    // Step 4: Create API Gateway and Configure Integrations
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Creating API Gateway...');
+    console.log('Step 3: API Gateway Setup');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     const apiConfig: ApiGatewayConfig = {
@@ -38,6 +50,8 @@ async function deploy() {
     console.log('✅ Project Deployed Successfully!');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\n📋 Deployment Summary:');
+    console.log(`   • S3 Bucket: ${s3Result.bucketName}`);
+    console.log(`   • Uploaded Files: ${s3Result.uploadedFiles.length}`);
     console.log(`   • API ID: ${apiResult.apiId}`);
     console.log(`   • API URL: ${apiResult.apiUrl}`);
     console.log(`   • Region: ${apiResult.region}`);
@@ -46,6 +60,10 @@ async function deploy() {
     console.log(`   • GET ${apiResult.apiUrl}/ships`);
     console.log(`   • GET ${apiResult.apiUrl}/ships/profile/{key}`);
     console.log(`   • GET ${apiResult.apiUrl}/ships/photo/{key}`);
+    console.log('\n📸 Uploaded Ship Photos:');
+    s3Result.uploadedFiles.forEach(file => {
+      console.log(`   • ${file} → s3://${s3Result.bucketName}/${file}`);
+    });
     console.log('\n💡 Test with checker/index.html using Live Server');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   } catch (error) {
