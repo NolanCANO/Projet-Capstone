@@ -11,6 +11,7 @@
     "deploy": "ts-node src/deploy-project.ts",
     "destroy": "ts-node src/destroy-project.ts",
     "get-roles": "ts-node src/get-iam-roles.ts",
+    "test-dynamodb": "ts-node src/test-dynamodb.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
