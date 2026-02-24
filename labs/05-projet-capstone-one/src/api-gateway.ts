@@ -22,6 +22,9 @@ import {
   CreateDeploymentCommand,
   DeleteRestApiCommand,
   PutGatewayResponseCommand,
+  CreateApiKeyCommand,
+  CreateUsagePlanCommand,
+  CreateUsagePlanKeyCommand,
 } from '@aws-sdk/client-api-gateway';
 
 // Configuration
@@ -50,6 +53,7 @@ export interface ApiGatewayResult {
   apiUrl: string;
   region: string;
   stageName: string;
+  apiKey: string;
 }
 
 /**
@@ -82,14 +86,19 @@ export async function createApiGateway(config: ApiGatewayConfig): Promise<ApiGat
     // Step 6: Deploy API
     const apiUrl = await deployApi(apiId);
     
+    // Step 7: Create API Key and Usage Plan
+    const apiKey = await createApiKeyAndUsagePlan(apiId, STAGE_NAME);
+    
     console.log('\n✅ API Gateway successfully created and deployed!');
-    console.log(`📍 API URL: ${apiUrl}\n`);
+    console.log(`📍 API URL: ${apiUrl}`);
+    console.log(`🔑 API Key: ${apiKey}\n`);
 
     return {
       apiId,
       apiUrl,
       region: AWS_REGION,
       stageName: STAGE_NAME,
+      apiKey,
     };
   } catch (error) {
     console.error('❌ Error creating API Gateway:', error);
@@ -242,6 +251,7 @@ async function configureGetShipsEndpoint(
       resourceId: resourceId,
       httpMethod: 'GET',
       authorizationType: 'NONE',
+      apiKeyRequired: true,
     })
   );
 
@@ -347,8 +357,7 @@ async function configureGetShipProfileEndpoint(
       restApiId: apiId,
       resourceId: resourceId,
       httpMethod: 'GET',
-      authorizationType: 'NONE',
-      requestParameters: {
+      authorizationType: 'NONE',      apiKeyRequired: true,      requestParameters: {
         'method.request.path.key': true,
       },
     })
@@ -502,8 +511,7 @@ async function configureGetShipPhotoEndpoint(
       restApiId: apiId,
       resourceId: resourceId,
       httpMethod: 'GET',
-      authorizationType: 'NONE',
-      requestParameters: {
+      authorizationType: 'NONE',      apiKeyRequired: true,      requestParameters: {
         'method.request.path.key': true,
       },
     })
@@ -667,6 +675,65 @@ async function addGatewayResponseCORS(apiId: string) {
   }
 
   console.log('   ✓ Gateway Response CORS headers added');
+}
+
+/**
+ * Create API Key and Usage Plan
+ * This secures the API endpoints by requiring an API key
+ */
+async function createApiKeyAndUsagePlan(apiId: string, stageName: string): Promise<string> {
+  console.log('🔑 Creating API Key and Usage Plan...');
+
+  // Create API Key
+  const apiKeyResponse = await apiGatewayClient.send(
+    new CreateApiKeyCommand({
+      name: `maritime-api-key-${Date.now()}`,
+      description: 'API key for Maritime Surveillance System',
+      enabled: true,
+    })
+  );
+
+  const apiKeyId = apiKeyResponse.id!;
+  const apiKeyValue = apiKeyResponse.value!;
+  console.log(`   ✓ API Key created: ${apiKeyId}`);
+
+  // Create Usage Plan
+  const usagePlanResponse = await apiGatewayClient.send(
+    new CreateUsagePlanCommand({
+      name: `maritime-usage-plan-${Date.now()}`,
+      description: 'Usage plan for Maritime Surveillance API',
+      apiStages: [
+        {
+          apiId: apiId,
+          stage: stageName,
+        },
+      ],
+      throttle: {
+        rateLimit: 100,  // requests per second
+        burstLimit: 200, // maximum concurrent requests
+      },
+      quota: {
+        limit: 10000,    // 10,000 requests
+        period: 'DAY',   // per day
+      },
+    })
+  );
+
+  const usagePlanId = usagePlanResponse.id!;
+  console.log(`   ✓ Usage Plan created: ${usagePlanId}`);
+
+  // Associate API Key with Usage Plan
+  await apiGatewayClient.send(
+    new CreateUsagePlanKeyCommand({
+      usagePlanId: usagePlanId,
+      keyId: apiKeyId,
+      keyType: 'API_KEY',
+    })
+  );
+
+  console.log('   ✓ API Key associated with Usage Plan');
+
+  return apiKeyValue;
 }
 
 /**

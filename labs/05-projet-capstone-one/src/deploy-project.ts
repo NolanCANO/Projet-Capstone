@@ -83,17 +83,21 @@ async function deploy() {
     console.log(`   • DynamoDB Table: ${tableName}`);
     console.log(`   • API ID: ${apiResult.apiId}`);
     console.log(`   • API URL: ${apiResult.apiUrl}`);
+    console.log(`   • API Key: ${apiResult.apiKey}`);
     console.log(`   • Region: ${apiResult.region}`);
     console.log(`   • Stage: ${apiResult.stageName}`);
     console.log('\n🔗 API Endpoints:');
     console.log(`   • GET ${apiResult.apiUrl}/ships`);
     console.log(`   • GET ${apiResult.apiUrl}/ships/profile/{key}`);
     console.log(`   • GET ${apiResult.apiUrl}/ships/photo/{key}`);
+    console.log('\n🔑 Using API Key:');
+    console.log(`   Add header: x-api-key: ${apiResult.apiKey}`);
     console.log('\n📸 Uploaded Ship Photos:');
     s3Result.uploadedFiles.forEach(file => {
       console.log(`   • ${file} → s3://${s3Result.bucketName}/${file}`);
     });
     console.log('\n💡 Test with checker/index.html using Live Server');
+    console.log('   Enter the API URL and API Key in the form');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   } catch (error) {
     console.error('\n❌ Deployment Error:', error);
