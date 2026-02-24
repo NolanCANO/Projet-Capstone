@@ -251,6 +251,10 @@ async function configureGetShipsEndpoint(
       integrationHttpMethod: 'POST',
       uri: `arn:aws:apigateway:${AWS_REGION}:dynamodb:action/Scan`,
       credentials: roleArn,
+      passthroughBehavior: 'NEVER',
+      requestParameters: {
+        'integration.request.header.Content-Type': "'application/x-amz-json-1.0'",
+      },
       requestTemplates: {
         'application/json': `{"TableName": "${tableName}"}`,
       },
@@ -270,7 +274,7 @@ async function configureGetShipsEndpoint(
     })
   );
 
-  // Integration response with VTL transformation
+  // Integration response with VTL transformation - 200 (Default)
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -295,6 +299,23 @@ async function configureGetShipsEndpoint(
   }#if($foreach.hasNext),#end
   #end
 ]`,
+      },
+    })
+  );
+
+  // Integration response - 500 (Catches backend errors)
+  await apiGatewayClient.send(
+    new PutIntegrationResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '500',
+      selectionPattern: '(\\n|.)*(Exception|Error|Failed|Unauthorized)(\\n|.)*',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+      responseTemplates: {
+        'application/json': '{"error": "Internal server error"}',
       },
     })
   );
@@ -337,8 +358,10 @@ async function configureGetShipProfileEndpoint(
       integrationHttpMethod: 'POST',
       uri: `arn:aws:apigateway:${AWS_REGION}:dynamodb:action/GetItem`,
       credentials: roleArn,
+      passthroughBehavior: 'NEVER',
       requestParameters: {
         'integration.request.path.key': 'method.request.path.key',
+        'integration.request.header.Content-Type': "'application/x-amz-json-1.0'",
       },
       requestTemplates: {
         'application/json': `{
@@ -353,7 +376,7 @@ async function configureGetShipProfileEndpoint(
     })
   );
 
-  // Method response
+  // Method response - 200 (Success)
   await apiGatewayClient.send(
     new PutMethodResponseCommand({
       restApiId: apiId,
@@ -366,7 +389,67 @@ async function configureGetShipProfileEndpoint(
     })
   );
 
-  // Integration response with VTL transformation
+  // Method response - 404 (Not Found)
+  await apiGatewayClient.send(
+    new PutMethodResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '404',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': true,
+      },
+    })
+  );
+
+  // Method response - 500 (Server Error)
+  await apiGatewayClient.send(
+    new PutMethodResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '500',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': true,
+      },
+    })
+  );
+
+  // Integration response - 500 (Catches DynamoDB errors - must come FIRST)
+  await apiGatewayClient.send(
+    new PutIntegrationResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '500',
+      selectionPattern: '.*(__type|Exception|Error).*',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+      responseTemplates: {
+        'application/json': '{"error": "Internal server error", "message": "$input.path(\'$.message\')"}',
+      },
+    })
+  );
+
+  // Integration response - 404 (Item not found)
+  await apiGatewayClient.send(
+    new PutIntegrationResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '404',
+      selectionPattern: '.*"Item"\\s*:\\s*\\{\\s*\\}.*',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+      responseTemplates: {
+        'application/json': '{"error": "Ship not found"}',
+      },
+    })
+  );
+
+  // Integration response - 200 (Default - successful responses with items)
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -378,6 +461,7 @@ async function configureGetShipProfileEndpoint(
       },
       responseTemplates: {
         'application/json': `#set($inputRoot = $input.path('$'))
+#if($inputRoot.Item && !$inputRoot.Item.isEmpty())
 {
   "id": "$inputRoot.Item.id.S",
   "nom": "$inputRoot.Item.nom.S",
@@ -386,7 +470,12 @@ async function configureGetShipProfileEndpoint(
   "taille": $inputRoot.Item.taille.N,
   "nombre_marins": $inputRoot.Item.nombre_marins.N,
   "s3_image_key": "$inputRoot.Item.s3_image_key.S"
-}`,
+}
+#else
+{
+  "error": "Ship not found"
+}
+#end`,
       },
     })
   );
@@ -450,7 +539,7 @@ async function configureGetShipPhotoEndpoint(
     })
   );
 
-  // Integration response
+  // Integration response - 200 (Default)
   await apiGatewayClient.send(
     new PutIntegrationResponseCommand({
       restApiId: apiId,
@@ -460,6 +549,23 @@ async function configureGetShipPhotoEndpoint(
       responseParameters: {
         'method.response.header.Content-Type': 'integration.response.header.Content-Type',
         'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+    })
+  );
+
+  // Integration response - 404 (Catches S3 errors)
+  await apiGatewayClient.send(
+    new PutIntegrationResponseCommand({
+      restApiId: apiId,
+      resourceId: resourceId,
+      httpMethod: 'GET',
+      statusCode: '404',
+      selectionPattern: '(\\n|.)*(NoSuchKey|NotFound|AccessDenied)(\\n|.)*',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
+      responseTemplates: {
+        'application/json': '{"error": "Photo not found"}',
       },
     })
   );

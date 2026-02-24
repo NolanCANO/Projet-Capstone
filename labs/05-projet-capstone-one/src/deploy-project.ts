@@ -39,12 +39,30 @@ async function deploy() {
     await getTableInfo();
 
     // Step 3: Get IAM Role ARNs
-    const dynamodbRoleArn = process.env['DYNAMODB_ROLE_ARN'] || 'arn:aws:iam::ACCOUNT_ID:role/APIGatewayDynamoDBServiceRole';
-    const s3RoleArn = process.env['S3_ROLE_ARN'] || 'arn:aws:iam::ACCOUNT_ID:role/APIGatewayS3ServiceRole';
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Step 3: IAM Role ARNs');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    const dynamodbRoleArn = process.env['DYNAMODB_ROLE_ARN'];
+    const s3RoleArn = process.env['S3_ROLE_ARN'];
+
+    if (!dynamodbRoleArn || !s3RoleArn) {
+      console.error('❌ Error: IAM Role ARNs are required');
+      console.log('\nPlease set the environment variables:');
+      console.log('  export DYNAMODB_ROLE_ARN="arn:aws:iam::474150619989:role/APIGatewayDynamoDBServiceRole"');
+      console.log('  export S3_ROLE_ARN="arn:aws:iam::474150619989:role/APIGatewayS3ServiceRole"');
+      console.log('\nOr run:');
+      console.log('  npm run get-roles');
+      console.log('  source the output to set environment variables');
+      process.exit(1);
+    }
+
+    console.log(`✓ DynamoDB Role: ${dynamodbRoleArn}`);
+    console.log(`✓ S3 Role: ${s3RoleArn}`);
 
     // Step 4: Create API Gateway and Configure Integrations
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Step 3: API Gateway Setup');
+    console.log('Step 4: API Gateway Setup');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     const apiConfig: ApiGatewayConfig = {
