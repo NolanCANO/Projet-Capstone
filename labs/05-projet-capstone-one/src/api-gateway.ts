@@ -21,6 +21,7 @@ import {
   PutIntegrationResponseCommand,
   CreateDeploymentCommand,
   DeleteRestApiCommand,
+  PutGatewayResponseCommand,
 } from '@aws-sdk/client-api-gateway';
 
 // Configuration
@@ -74,6 +75,9 @@ export async function createApiGateway(config: ApiGatewayConfig): Promise<ApiGat
     
     // Step 5: Enable CORS on all resources
     await enableCORS(apiId, [resources.ships, resources.profileKey, resources.photoKey]);
+    
+    // Step 5.5: Add CORS headers to Gateway Responses (for API Gateway errors)
+    await addGatewayResponseCORS(apiId);
     
     // Step 6: Deploy API
     const apiUrl = await deployApi(apiId);
@@ -286,19 +290,21 @@ async function configureGetShipsEndpoint(
       },
       responseTemplates: {
         'application/json': `#set($inputRoot = $input.path('$'))
-[
-  #foreach($item in $inputRoot.Items)
-  {
-    "id": "$item.id.S",
-    "nom": "$item.nom.S",
-    "type": "$item.type.S",
-    "pavillon": "$item.pavillon.S",
-    "taille": $item.taille.N,
-    "nombre_marins": $item.nombre_marins.N,
-    "s3_image_key": "$item.s3_image_key.S"
-  }#if($foreach.hasNext),#end
-  #end
-]`,
+{
+  "ships": [
+    #foreach($item in $inputRoot.Items)
+    {
+      "id": "$item.id.S",
+      "nom": "$item.nom.S",
+      "type": "$item.type.S",
+      "pavillon": "$item.pavillon.S",
+      "taille": $item.taille.N,
+      "nombre_marins": $item.nombre_marins.N,
+      "s3_image_key": "$item.s3_image_key.S"
+    }#if($foreach.hasNext),#end
+    #end
+  ]
+}`,
       },
     })
   );
@@ -358,17 +364,12 @@ async function configureGetShipProfileEndpoint(
       integrationHttpMethod: 'POST',
       uri: `arn:aws:apigateway:${AWS_REGION}:dynamodb:action/GetItem`,
       credentials: roleArn,
-      passthroughBehavior: 'NEVER',
-      requestParameters: {
-        'integration.request.path.key': 'method.request.path.key',
-        'integration.request.header.Content-Type': "'application/x-amz-json-1.0'",
-      },
       requestTemplates: {
         'application/json': `{
   "TableName": "${tableName}",
   "Key": {
     "id": {
-      "S": "$input.params(\\"key\\")"
+      "S": "$input.params('key')"
     }
   }
 }`,
@@ -637,6 +638,32 @@ async function enableCORS(apiId: string, resourceIds: string[]) {
   }
 
   console.log('   ✓ CORS enabled on all endpoints');
+}
+
+/**
+ * Add CORS headers to Gateway Responses
+ * This fixes CORS issues for API Gateway's own error responses (4xx, 5xx)
+ */
+async function addGatewayResponseCORS(apiId: string) {
+  console.log('🔐 Adding CORS headers to Gateway Responses...');
+
+  const responseTypes = ['DEFAULT_4XX', 'DEFAULT_5XX'];
+
+  for (const responseType of responseTypes) {
+    await apiGatewayClient.send(
+      new PutGatewayResponseCommand({
+        restApiId: apiId,
+        responseType: responseType as any,
+        responseParameters: {
+          'gatewayresponse.header.Access-Control-Allow-Origin': "'*'",
+          'gatewayresponse.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+          'gatewayresponse.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
+        },
+      })
+    );
+  }
+
+  console.log('   ✓ Gateway Response CORS headers added');
 }
 
 /**
