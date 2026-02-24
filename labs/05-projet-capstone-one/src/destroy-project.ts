@@ -1,12 +1,15 @@
 import { deleteApiGateway } from './api-gateway';
+import { deleteS3Bucket } from './s3-bucket';
 
 // Main function to execute destructive operation
 async function main() {
   try {
     console.log('🗑️  Starting Project Deletion...\n');
 
-    // Get API ID from command line argument or environment variable
+    // Get configuration
     const apiId = process.argv[2] || process.env['API_GATEWAY_ID'];
+    const bucketName = process.env['BUCKET_NAME'] || 'maritime-surveillance-ships-photos';
+    const tableName = process.env['TABLE_NAME'] || 'maritime-ships';
 
     if (!apiId) {
       console.error('❌ Error: API Gateway ID is required');
@@ -18,18 +21,23 @@ async function main() {
       process.exit(1);
     }
 
+    // Step 1: Delete API Gateway
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Deleting API Gateway...');
+    console.log('Step 1: Deleting API Gateway...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    // Delete API Gateway
     await deleteApiGateway(apiId);
 
-    // TODO: Delete DynamoDB Items and Table
-    console.log('\n🗄️  DynamoDB cleanup (to be implemented)');
+    // Step 2: Delete DynamoDB (TODO)
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Step 2: DynamoDB cleanup (TODO)');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log(`🗄️  Table: ${tableName} (to be implemented)`);
 
-    // TODO: Delete S3 Objects and Bucket
-    console.log('📦 S3 cleanup (to be implemented)');
+    // Step 3: Delete S3 Bucket and Objects
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Step 3: Deleting S3 Bucket...');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    await deleteS3Bucket(bucketName);
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('✅ Project Deleted Successfully!');
