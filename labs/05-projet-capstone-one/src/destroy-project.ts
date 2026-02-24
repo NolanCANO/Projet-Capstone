@@ -1,5 +1,6 @@
 import { deleteApiGateway } from './api-gateway';
 import { deleteS3Bucket } from './s3-bucket';
+import { clearTableData, deleteDynamoDBTable } from './dynamodb';
 
 // Main function to execute destructive operation
 async function main() {
@@ -9,7 +10,6 @@ async function main() {
     // Get configuration
     const apiId = process.argv[2] || process.env['API_GATEWAY_ID'];
     const bucketName = process.env['BUCKET_NAME'] || 'maritime-surveillance-ships-photos';
-    const tableName = process.env['TABLE_NAME'] || 'maritime-ships';
 
     if (!apiId) {
       console.error('❌ Error: API Gateway ID is required');
@@ -27,11 +27,24 @@ async function main() {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     await deleteApiGateway(apiId);
 
-    // Step 2: Delete DynamoDB (TODO)
+    // Step 2: Delete DynamoDB Items and Table
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Step 2: DynamoDB cleanup (TODO)');
+    console.log('Step 2: Deleting DynamoDB Table...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    console.log(`🗄️  Table: ${tableName} (to be implemented)`);
+    
+    try {
+      // First clear all items from the table
+      await clearTableData();
+      
+      // Then delete the table itself
+      await deleteDynamoDBTable();
+    } catch (error: any) {
+      if (error.name === 'ResourceNotFoundException') {
+        console.log('⚠️  DynamoDB table does not exist, skipping...');
+      } else {
+        throw error;
+      }
+    }
 
     // Step 3: Delete S3 Bucket and Objects
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

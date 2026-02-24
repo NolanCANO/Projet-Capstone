@@ -103,6 +103,14 @@ async function createRestApi(): Promise<string> {
     new CreateRestApiCommand({
       name: API_NAME,
       description: 'API Gateway for maritime surveillance - Ship tracking and monitoring',
+      binaryMediaTypes: [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/*',
+      ],
       endpointConfiguration: {
         types: ['REGIONAL'],
       },
@@ -111,6 +119,7 @@ async function createRestApi(): Promise<string> {
 
   const apiId = response.id!;
   console.log(`   ✓ API created with ID: ${apiId}`);
+  console.log(`   ✓ Binary media types configured for images`);
   
   return apiId;
 }
@@ -423,6 +432,7 @@ async function configureGetShipPhotoEndpoint(
       requestParameters: {
         'integration.request.path.key': 'method.request.path.key',
       },
+      contentHandling: 'CONVERT_TO_BINARY',
     })
   );
 
