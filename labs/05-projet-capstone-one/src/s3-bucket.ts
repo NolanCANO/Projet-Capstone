@@ -169,6 +169,12 @@ async function uploadShipPhotos(bucketName: string, assetsPath: string): Promise
 
   const uploadedFiles: string[] = [];
 
+  // Filename mapping: local file -> S3 key name
+  const filenameMapping: Record<string, string> = {
+    'fisher.jpg': 'pecheur-b-001.jpg',
+    'tanker.jpg': 'tanker-b-002.jpg',
+  };
+
   try {
     // Read all files from assets directory
     const files = readdirSync(assetsPath);
@@ -200,18 +206,21 @@ async function uploadShipPhotos(bucketName: string, assetsPath: string): Promise
       // Determine content type
       const contentType = getContentType(fileName);
 
+      // Map filename to S3 key (use mapping if exists, otherwise use original filename)
+      const s3Key = filenameMapping[fileName] || fileName;
+
       // Upload to S3
       await s3Client.send(
         new PutObjectCommand({
           Bucket: bucketName,
-          Key: fileName,
+          Key: s3Key,
           Body: fileContent,
           ContentType: contentType,
         })
       );
 
-      uploadedFiles.push(fileName);
-      console.log(`   ✓ Uploaded: ${fileName} (${(fileContent.length / 1024).toFixed(2)} KB)`);
+      uploadedFiles.push(s3Key);
+      console.log(`   ✓ Uploaded: ${fileName} → ${s3Key} (${(fileContent.length / 1024).toFixed(2)} KB)`);
     }
 
     return uploadedFiles;
