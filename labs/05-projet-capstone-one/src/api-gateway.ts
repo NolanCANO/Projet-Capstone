@@ -522,6 +522,7 @@ async function configureGetShipPhotoEndpoint(
       requestParameters: {
         'integration.request.path.key': 'method.request.path.key',
       },
+      passthroughBehavior: 'WHEN_NO_MATCH',
       contentHandling: 'CONVERT_TO_BINARY',
     })
   );
@@ -535,6 +536,7 @@ async function configureGetShipPhotoEndpoint(
       statusCode: '200',
       responseParameters: {
         'method.response.header.Content-Type': true,
+        'method.response.header.Content-Length': true,
         'method.response.header.Access-Control-Allow-Origin': true,
       },
     })
@@ -549,6 +551,7 @@ async function configureGetShipPhotoEndpoint(
       statusCode: '200',
       responseParameters: {
         'method.response.header.Content-Type': 'integration.response.header.Content-Type',
+        'method.response.header.Content-Length': 'integration.response.header.Content-Length',
         'method.response.header.Access-Control-Allow-Origin': "'*'",
       },
     })
